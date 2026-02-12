@@ -22,13 +22,7 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=lo
 logger = logging.getLogger(__name__)
 
 # ==========================
-# Пользовательские языки и данные
-# ==========================
-user_languages = {}
-user_data_clear = lambda: {}  # для очистки
-
-# ==========================
-# Состояния
+# Состояния (для всех ConversationHandler)
 # ==========================
 (
     REPAIR_NAME, REPAIR_PHONE, REPAIR_TYPE, REPAIR_BRAND, REPAIR_MODEL, REPAIR_PROBLEM, REPAIR_CONFIRM
@@ -47,27 +41,16 @@ user_data_clear = lambda: {}  # для очистки
 MANAGER_CHAT = 30
 
 # ==========================
-# Вспомогательные функции
+# Вспомогательные клавиатуры
 # ==========================
-def check_phone(text: str) -> bool:
-    return bool(re.fullmatch(r"\+?\d{7,15}", text.strip()))
-
-def check_not_empty(text: str) -> bool:
-    return bool(text.strip())
-
-def check_number(text: str) -> bool:
-    return text.strip().isdigit() and int(text.strip()) > 0
-
 def get_cancel_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
-    ])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отмена", callback_data="cancel")]])
 
 def get_back_cancel_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back"),
-         InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
-    ])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("⬅️ Назад", callback_data="back"),
+        InlineKeyboardButton("❌ Отмена", callback_data="cancel")
+    ]])
 
 def get_confirm_keyboard():
     return InlineKeyboardMarkup([
@@ -75,106 +58,93 @@ def get_confirm_keyboard():
         [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
     ])
 
-# ==========================
-# Главное меню
-# ==========================
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = "👋 Привет! Выберите действие 👇"):
-    keyboard = [
+def get_main_menu_keyboard():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("🧰 Записаться на ремонт", callback_data="repair")],
         [InlineKeyboardButton("🚚 Вызвать курьера", callback_data="courier")],
         [InlineKeyboardButton("🖨 Заправка картриджей", callback_data="cartridge")],
         [InlineKeyboardButton("💬 Связаться с менеджером", callback_data="manager")],
         [InlineKeyboardButton("📍 Адрес и контакты", callback_data="contacts")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
+    ])
+
+# ==========================
+# Главное меню
+# ==========================
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = "👋 Привет! Выберите действие 👇"):
     if update.callback_query:
-        await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
+        await update.callback_query.message.edit_text(text, reply_markup=get_main_menu_keyboard())
     else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
+        await update.message.reply_text(text, reply_markup=get_main_menu_keyboard())
 
 # ==========================
 # Общие действия
 # ==========================
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
-    if query:
-        await query.answer()
-        await query.message.edit_text("❌ Действие отменено.")
-    else:
-        await update.message.reply_text("❌ Действие отменено.")
-    
+    await query.answer()
+    await query.message.edit_text("❌ Действие отменено.")
     context.user_data.clear()
     await main_menu(update, context, "Что дальше?")
     return ConversationHandler.END
 
-async def back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+# ==========================
+# Контакты
+# ==========================
+async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    current_state = context.user_data.get("state", 0)
-    if current_state in [REPAIR_PHONE, COURIER_PHONE, CARTRIDGE_PHONE]:
-        await query.message.reply_text("Введите ваше имя:")
-        return REPAIR_NAME if "repair" in context.user_data.get("mode", "") else \
-               COURIER_NAME if "courier" in context.user_data.get("mode", "") else CARTRIDGE_NAME
-    
-    # Можно расширить "назад" дальше, но для простоты — пока только на имя
-    await query.message.reply_text("Вернулись в начало формы. Введите имя:")
-    return REPAIR_NAME  # упрощённо
 
-# ==========================
-# Подтверждение (общее)
-# ==========================
-async def show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, msg: str, state: int):
-    await update.message.reply_text(
-        f"Проверьте данные:\n\n{msg}\n\nВсё верно?",
-        reply_markup=get_confirm_keyboard()
+    text = (
+        "🏢 Наш адрес: г. Днепр, ул. Княгини Ольги, дом 1 (2-й этаж)\n"
+        "📞 067 319 39 96\n"
+        "💬 @trablnet\n"
+        "✉️ office@kompomir.com"
     )
-    return state
+
+    keyboard = [[InlineKeyboardButton("⬅️ Назад в меню", callback_data="main")]]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # ==========================
-# Ремонт — Conversation
+# Связь с менеджером
 # ==========================
-async def repair_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def manager_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data["mode"] = "repair"
-    context.user_data["state"] = REPAIR_NAME
-    await query.message.reply_text("Введите ваше имя:", reply_markup=get_cancel_keyboard())
-    return REPAIR_NAME
 
-async def repair_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not check_not_empty(update.message.text):
-        await update.message.reply_text("❗ Имя не может быть пустым. Введите имя:")
-        return REPAIR_NAME
-    context.user_data["name"] = update.message.text.strip()
-    await update.message.reply_text("Введите номер телефона:", reply_markup=get_back_cancel_keyboard())
-    return REPAIR_PHONE
+    text = "✍️ Напишите ваш вопрос прямо сюда — менеджер скоро ответит."
+    keyboard = [[InlineKeyboardButton("⬅️ Назад в меню", callback_data="main")]]
 
-# ... (аналогично для остальных шагов ремонта, добавляем reply_markup)
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data["chat_with_manager"] = True
 
-async def repair_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "confirm":
-        data = context.user_data
-        msg = (
-            f"🧾 Новая заявка на ремонт\n"
-            f"Имя: {data['name']}\n"
-            f"Телефон: {data['phone']}\n"
-            f"Тип: {data['type']}\n"
-            f"Бренд: {data['brand']}\n"
-            f"Модель: {data['model']}\n"
-            f"Проблема: {data['problem']}"
-        )
-        await context.bot.send_message(chat_id=OPERATOR_CHAT_ID, text=msg)
-        await query.message.edit_text("✅ Заявка отправлена! Скоро с вами свяжутся.")
-        context.user_data.clear()
+# ==========================
+# Простой forward для чата с менеджером
+# ==========================
+async def forward_to_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("chat_with_manager"):
+        user = update.message.from_user
+        text = f"Сообщение от {user.first_name} (@{user.username or 'нет'}):\n\n{update.message.text}"
+        await context.bot.send_message(chat_id=OPERATOR_CHAT_ID, text=text)
+        await update.message.reply_text("✅ Сообщение отправлено менеджеру.")
+        context.user_data["chat_with_manager"] = False
         await main_menu(update, context)
-        return ConversationHandler.END
-    
-    return await cancel(update, context)
+
+# ==========================
+# Заглушки для курьера и картриджей (пока только начало)
+# ==========================
+async def courier_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🚚 Вызов курьера (в разработке)\n\nВведите имя:", reply_markup=get_cancel_keyboard())
+    context.user_data["mode"] = "courier"
+    return COURIER_NAME
+
+async def cartridge_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🖨 Заправка картриджей (в разработке)\n\nВведите имя:", reply_markup=get_cancel_keyboard())
+    context.user_data["mode"] = "cartridge"
+    return CARTRIDGE_NAME
 
 # ==========================
 # Запуск бота
@@ -184,27 +154,28 @@ def main():
 
     # Общие обработчики
     app.add_handler(CallbackQueryHandler(cancel, pattern="^cancel$"))
-    app.add_handler(CallbackQueryHandler(back, pattern="^back$"))
+    app.add_handler(CallbackQueryHandler(contacts_handler, pattern="^contacts$"))
+    app.add_handler(CallbackQueryHandler(manager_handler, pattern="^manager$"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: main_menu(u, c), pattern="^main$"))
 
-    # Главное меню и контакты
-    app.add_handler(CommandHandler("start", lambda u, c: main_menu(u, c)))
-    app.add_handler(CallbackQueryHandler(lambda u, c: main_menu(u, c, "Выберите действие:"), pattern="^main$"))
+    # Чат с менеджером
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_manager))
 
-    # ConversationHandler для ремонта (пример — остальные аналогично)
+    # ConversationHandler — ремонт (можно расширять)
     repair_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(repair_start, pattern="^repair$")],
-        states={
-            REPAIR_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, repair_name)],
-            # ... остальные состояния
-            REPAIR_CONFIRM: [CallbackQueryHandler(repair_confirm, pattern="^(confirm|cancel)$")],
-        },
+        entry_points=[CallbackQueryHandler(lambda u, c: main_menu(u, c, "Ремонт (в разработке)"), pattern="^repair$")],
+        states={},
         fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel$")],
-        conversation_timeout=600,  # 10 минут
-        name="repair_conversation",
+        conversation_timeout=600,
     )
     app.add_handler(repair_conv)
 
-    # Аналогично добавь courier_conv и cartridge_conv
+    # Курьер и картриджи — пока заглушки
+    app.add_handler(CallbackQueryHandler(courier_start, pattern="^courier$"))
+    app.add_handler(CallbackQueryHandler(cartridge_start, pattern="^cartridge$"))
+
+    # Старт
+    app.add_handler(CommandHandler("start", lambda u, c: main_menu(u, c)))
 
     logger.info("✅ Бот запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
