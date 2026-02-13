@@ -13,7 +13,7 @@ from telegram.ext import (
 # ==========================
 # Настройки
 # ==========================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7512974894:AAExp5r09Ow5ri1DTA_Vy1hl44-XZmVjyqI")
+BOT_TOKEN = os.getenv("BOT_TOKEN", )
 OPERATOR_CHAT_ID = int(os.getenv("OPERATOR_CHAT_ID", "1383290607"))
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
