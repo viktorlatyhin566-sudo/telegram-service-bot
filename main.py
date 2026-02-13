@@ -18,6 +18,9 @@ from telegram.ext import (
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPERATOR_CHAT_ID = int(os.getenv("OPERATOR_CHAT_ID", "0"))
 
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не задан в переменных окружения Railway!")
+
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -64,7 +67,7 @@ def confirm_keyboard():
 # ==========================
 # Главное меню
 # ==========================
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text="👋 Добро пожаловать! Чем поможем?"):
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text="👋 Добро пожаловать! Чем поможем? 😊"):
     markup = main_menu_keyboard()
     if update.callback_query:
         await update.callback_query.message.edit_text(text, reply_markup=markup)
@@ -72,7 +75,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text="�
         await update.message.reply_text(text, reply_markup=markup)
 
 # ==========================
-# Общие действия
+# Отмена
 # ==========================
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -89,13 +92,13 @@ async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     text = (
-        "🏢 Наш адрес: г. Днепр, ул. Княгини Ольги, дом 1 (2-й этаж)\n"
-        "🕒 График работы: Пн–Пт 9:00–18:00, Сб 10:00–15:00\n"
-        "📞 Телефон: 067 319 39 96\n"
-        "💬 Telegram: @trablnet\n"
-        "✉️ Email: office@kompomir.com"
+        "🏢 Адрес: г. Днепр, ул. Княгини Ольги, 1 (2-й этаж)\n"
+        "🕒 График: Пн–Пт 9:00–18:00, Сб 10:00–15:00\n"
+        "📞 067 319 39 96\n"
+        "💬 @trablnet\n"
+        "✉️ office@kompomir.com"
     )
-    kb = [[InlineKeyboardButton("⬅️ Назад в меню", callback_data="main")]]
+    kb = [[InlineKeyboardButton("⬅️ В меню", callback_data="main")]]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 # ==========================
@@ -106,20 +109,20 @@ async def social_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     text = (
         "📢 Наши ресурсы:\n\n"
-        "• Официальный канал — @trablnet\n"
-        "• Интернет-магазин — https://trablnet.com.ua 🛒"
+        "• Канал — @trablnet\n"
+        "• Магазин — https://trablnet.com.ua 🛒"
     )
-    kb = [[InlineKeyboardButton("⬅️ Назад в меню", callback_data="main")]]
+    kb = [[InlineKeyboardButton("⬅️ В меню", callback_data="main")]]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 # ==========================
-# Связаться с оператором
+# Оператор
 # ==========================
 async def manager_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.message.reply_text(
-        "✍️ Напишите ваш вопрос или проблему — оператор ответит как можно скорее 😊",
+        "✍️ Напишите сообщение — оператор ответит максимально быстро 😊",
         reply_markup=cancel_keyboard()
     )
     context.user_data["chat_with_manager"] = True
@@ -127,55 +130,27 @@ async def manager_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def forward_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("chat_with_manager"):
         user = update.message.from_user
-        text = f"💬 Сообщение оператору от {user.first_name} (@{user.username or 'нет'}):\n\n{update.message.text}"
+        text = f"💬 От {user.first_name} (@{user.username or 'нет'}):\n\n{update.message.text}"
         await context.bot.send_message(OPERATOR_CHAT_ID, text)
-        await update.message.reply_text("✅ Сообщение отправлено! Скоро ответим 😊", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("✅ Отправлено! Скоро ответим 😊", reply_markup=main_menu_keyboard())
         context.user_data["chat_with_manager"] = False
 
 # ==========================
-# Ремонт / Системный администратор (общий обработчик)
+# Общий старт для ремонта и sysadmin
 # ==========================
 async def repair_or_sysadmin_start(update: Update, context: ContextTypes.DEFAULT_TYPE, is_sysadmin=False) -> int:
     query = update.callback_query
     await query.answer()
     context.user_data["is_sysadmin"] = is_sysadmin
-    context.user_data["mode"] = "sysadmin" if is_sysadmin else "repair"
-    await query.message.reply_text("👤 Введите ваше имя:", reply_markup=cancel_keyboard())
+    title = "💻 Помощь системного администратора" if is_sysadmin else "🛠️ Запись на ремонт"
+    await query.message.reply_text(f"{title}\n\n👤 Введите ваше имя:", reply_markup=cancel_keyboard())
     return REPAIR_NAME
 
-# ... (остальные шаги name_step, phone_step и т.д. остаются такими же, как в предыдущей версии)
-
-# В confirm_step добавляем эмодзи в сообщение об успехе
-async def confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data != "confirm":
-        await query.message.edit_text("🚫 Заявка отменена.")
-        await main_menu(update, context, "Вернулись в меню 😊")
-        context.user_data.clear()
-        return ConversationHandler.END
-    
-    title = "💻 Заявка на помощь системного администратора" if context.user_data.get("is_sysadmin") else "🛠️ Заявка на ремонт"
-    
-    msg = (
-        f"{title}\n\n"
-        f"👤 Имя: {context.user_data.get('name', '—')}\n"
-        f"📱 Телефон: {context.user_data.get('phone', '—')}\n"
-        f"🖥️ Тип: {context.user_data.get('type', '—')}\n"
-        f"🏷️ Бренд: {context.user_data.get('brand', '—')}\n"
-        f"🔧 Модель: {context.user_data.get('model', '—')}\n"
-        f"⚠️ Проблема: {context.user_data.get('problem', '—')}"
-    )
-    
-    await context.bot.send_message(OPERATOR_CHAT_ID, msg)
-    await query.message.edit_text("🎉 Заявка успешно отправлена!\nСкоро с вами свяжемся 😊")
-    await main_menu(update, context)
-    context.user_data.clear()
-    return ConversationHandler.END
+# Остальные шаги ремонта / sysadmin (name, phone, type, brand, model, problem, confirm)
+# Здесь нужно вставить функции name_step, phone_step и т.д. из твоей предыдущей рабочей версии
 
 # ==========================
-# Курьер — с эмодзи
+# Курьер
 # ==========================
 async def courier_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -183,37 +158,10 @@ async def courier_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await query.message.reply_text("🚚 Вызов курьера\n\n👤 Введите ваше имя:", reply_markup=cancel_keyboard())
     return COURIER_NAME
 
-# ... остальные шаги курьера аналогично, но в summary и confirm добавляем эмодзи
-
-async def courier_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data != "confirm":
-        await query.message.edit_text("🚫 Отменено.")
-        await main_menu(update, context)
-        context.user_data.clear()
-        return ConversationHandler.END
-    
-    msg = (
-        "🚚 Заявка на вызов курьера\n\n"
-        f"👤 Имя: {context.user_data.get('c_name', '—')}\n"
-        f"📱 Телефон: {context.user_data.get('c_phone', '—')}\n"
-        f"🖥️ Тип: {context.user_data.get('c_type', '—')}\n"
-        f"🏷️ Бренд: {context.user_data.get('c_brand', '—')}\n"
-        f"🔧 Модель: {context.user_data.get('c_model', '—')}\n"
-        f"📏 Габариты: {context.user_data.get('c_dimensions', '—')}\n"
-        f"📍 Адрес: {context.user_data.get('c_address', '—')}"
-    )
-    
-    await context.bot.send_message(OPERATOR_CHAT_ID, msg)
-    await query.message.edit_text("🚚 Заявка на курьера отправлена! 🎉\nСкоро свяжемся 😊")
-    await main_menu(update, context)
-    context.user_data.clear()
-    return ConversationHandler.END
+# ... (courier_name, courier_phone, courier_type, courier_brand, courier_model, courier_dimensions, courier_address, courier_confirm)
 
 # ==========================
-# Картриджи — с эмодзи
+# Картриджи
 # ==========================
 async def cartridge_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -221,49 +169,19 @@ async def cartridge_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.message.reply_text("🖨️ Заправка картриджей\n\n👤 Введите ваше имя:", reply_markup=cancel_keyboard())
     return CARTRIDGE_NAME
 
-# ... остальные шаги картриджей
-
-async def cartridge_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data != "confirm":
-        await query.message.edit_text("🚫 Отменено.")
-        await main_menu(update, context)
-        context.user_data.clear()
-        return ConversationHandler.END
-    
-    msg = (
-        "🖨️ Заявка на заправку картриджей\n\n"
-        f"👤 Имя: {context.user_data.get('cr_name', '—')}\n"
-        f"📱 Телефон: {context.user_data.get('cr_phone', '—')}\n"
-        f"🏷️ Бренд принтера: {context.user_data.get('cr_brand', '—')}\n"
-        f"🖨️ Модель принтера: {context.user_data.get('cr_model', '—')}\n"
-        f"🔋 Модель картриджа: {context.user_data.get('cr_cartridge', '—')}\n"
-        f"📍 Адрес: {context.user_data.get('cr_address', '—')}"
-    )
-    
-    await context.bot.send_message(OPERATOR_CHAT_ID, msg)
-    await query.message.edit_text("🖨️ Заявка на заправку отправлена! 🎉\nСкоро свяжемся 😊")
-    await main_menu(update, context)
-    context.user_data.clear()
-    return ConversationHandler.END
+# ... (cartridge_name, cartridge_phone, cartridge_brand, cartridge_model, cartridge_cartridge_model, cartridge_address, cartridge_confirm)
 
 # ==========================
 # ЗАПУСК
 # ==========================
 def main():
-    if not BOT_TOKEN:
-        logger.error("BOT_TOKEN не задан!")
-        raise ValueError("BOT_TOKEN не задан в переменных окружения")
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Общие обработчики
+    # Общие
     app.add_handler(CallbackQueryHandler(cancel, pattern="^cancel$"))
     app.add_handler(CallbackQueryHandler(lambda u, c: main_menu(u, c), pattern="^main$"))
 
-    # Статические разделы
+    # Статические
     app.add_handler(CallbackQueryHandler(contacts_handler, pattern="^contacts$"))
     app.add_handler(CallbackQueryHandler(social_handler, pattern="^social$"))
     app.add_handler(CallbackQueryHandler(manager_handler, pattern="^manager$"))
@@ -323,7 +241,7 @@ def main():
     )
     app.add_handler(cartridge_conv)
 
-    # Пересылка сообщений
+    # Сообщения оператору
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_manager))
 
     # Старт
