@@ -17,7 +17,6 @@ from telegram.ext import (
 # ==========================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPERATOR_CHAT_ID = int(os.getenv("OPERATOR_CHAT_ID", "0"))
-
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не задан в переменных окружения!")
 
@@ -139,10 +138,21 @@ async def name_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def phone_step(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    if not re.fullmatch(r"\+?\d{7,15}", text):
-        await update.message.reply_text("❗ Неверный формат телефона. Пример: +380671234567")
+    # Оставляем только цифры для проверки длины
+    digits = ''.join(c for c in text if c.isdigit())
+    
+    if len(digits) < 9:
+        await update.message.reply_text(
+            "❗ Пожалуйста, введите номер телефона (минимум 9 цифр).\n"
+            "Можно писать любым удобным способом:\n"
+            "0671234567\n"
+            "+380671234567\n"
+            "050 123 45 67\n"
+            "(063) 987-65-43 и т.д."
+        )
         return REPAIR_PHONE
-    context.user_data["phone"] = text
+    
+    context.user_data["phone"] = text  # сохраняем как ввёл пользователь
     await update.message.reply_text("🖥️ Тип оборудования (ноутбук, ПК, принтер и т.д.):", reply_markup=cancel_keyboard())
     return REPAIR_TYPE
 
@@ -184,6 +194,7 @@ async def repair_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await main_menu(update, context)
         context.user_data.clear()
         return ConversationHandler.END
+    
     title = "🛠️ Заявка на ремонт" if context.user_data["mode"] == "repair" else "💻 Заявка на помощь системного администратора"
     msg = (
         f"{title}\n"
@@ -220,9 +231,16 @@ async def courier_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def courier_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    if not re.fullmatch(r"\+?\d{7,15}", text):
-        await update.message.reply_text("❗ Неверный формат телефона.")
+    digits = ''.join(c for c in text if c.isdigit())
+    
+    if len(digits) < 9:
+        await update.message.reply_text(
+            "❗ Пожалуйста, введите номер телефона (минимум 9 цифр).\n"
+            "Можно писать любым удобным способом:\n"
+            "0671234567  +380671234567  050 123 45 67  (063)987-65-43"
+        )
         return COURIER_PHONE
+    
     context.user_data["c_phone"] = text
     await update.message.reply_text("🖥️ Тип оборудования:", reply_markup=cancel_keyboard())
     return COURIER_TYPE
@@ -253,6 +271,7 @@ async def courier_address(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("❗ Адрес обязателен.")
         return COURIER_ADDRESS
     context.user_data["c_address"] = text
+    
     summary = (
         "🚚 Заявка на вызов курьера\n\n"
         f"👤 Имя: {context.user_data.get('c_name', '—')}\n"
@@ -274,6 +293,7 @@ async def courier_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await main_menu(update, context)
         context.user_data.clear()
         return ConversationHandler.END
+    
     msg = (
         "🚚 Заявка на вызов курьера\n"
         f"👤 Имя: {context.user_data.get('c_name', '—')}\n"
@@ -310,9 +330,16 @@ async def cartridge_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def cartridge_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    if not re.fullmatch(r"\+?\d{7,15}", text):
-        await update.message.reply_text("❗ Неверный формат телефона.")
+    digits = ''.join(c for c in text if c.isdigit())
+    
+    if len(digits) < 9:
+        await update.message.reply_text(
+            "❗ Пожалуйста, введите номер телефона (минимум 9 цифр).\n"
+            "Можно писать любым удобным способом:\n"
+            "0671234567  +380671234567  050 123 45 67  (063)987-65-43"
+        )
         return CARTRIDGE_PHONE
+    
     context.user_data["cr_phone"] = text
     await update.message.reply_text("🏷️ Бренд принтера / МФУ:", reply_markup=cancel_keyboard())
     return CARTRIDGE_BRAND
@@ -338,6 +365,7 @@ async def cartridge_address(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("❗ Адрес обязателен.")
         return CARTRIDGE_ADDRESS
     context.user_data["cr_address"] = text
+    
     summary = (
         "🖨️ Заявка на заправку картриджей\n\n"
         f"👤 Имя: {context.user_data.get('cr_name', '—')}\n"
@@ -358,6 +386,7 @@ async def cartridge_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await main_menu(update, context)
         context.user_data.clear()
         return ConversationHandler.END
+    
     msg = (
         "🖨️ Заявка на заправку картриджей\n"
         f"👤 Имя: {context.user_data.get('cr_name', '—')}\n"
@@ -378,16 +407,16 @@ async def cartridge_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # ==========================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
+    
     # Общие
     app.add_handler(CallbackQueryHandler(cancel, pattern="^cancel$"))
     app.add_handler(CallbackQueryHandler(lambda u, c: main_menu(u, c), pattern="^main$"))
-
+    
     # Статические
     app.add_handler(CallbackQueryHandler(contacts_handler, pattern="^contacts$"))
     app.add_handler(CallbackQueryHandler(social_handler, pattern="^social$"))
     app.add_handler(CallbackQueryHandler(manager_handler, pattern="^manager$"))
-
+    
     # Ремонт + Sysadmin
     repair_conv = ConversationHandler(
         entry_points=[
@@ -395,60 +424,60 @@ def main():
             CallbackQueryHandler(sysadmin_start, pattern="^sysadmin$"),
         ],
         states={
-            REPAIR_NAME:     [MessageHandler(filters.TEXT & ~filters.COMMAND, name_step)],
-            REPAIR_PHONE:    [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_step)],
-            REPAIR_TYPE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, type_step)],
-            REPAIR_BRAND:    [MessageHandler(filters.TEXT & ~filters.COMMAND, brand_step)],
-            REPAIR_MODEL:    [MessageHandler(filters.TEXT & ~filters.COMMAND, model_step)],
-            REPAIR_PROBLEM:  [MessageHandler(filters.TEXT & ~filters.COMMAND, problem_step)],
-            REPAIR_CONFIRM:  [CallbackQueryHandler(repair_confirm, pattern="^(confirm|cancel)$")],
+            REPAIR_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name_step)],
+            REPAIR_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_step)],
+            REPAIR_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, type_step)],
+            REPAIR_BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, brand_step)],
+            REPAIR_MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, model_step)],
+            REPAIR_PROBLEM: [MessageHandler(filters.TEXT & ~filters.COMMAND, problem_step)],
+            REPAIR_CONFIRM: [CallbackQueryHandler(repair_confirm, pattern="^(confirm|cancel)$")],
         },
         fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel$")],
         conversation_timeout=900,
     )
     app.add_handler(repair_conv)
-
+    
     # Курьер
     courier_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(courier_start, pattern="^courier$")],
         states={
-            COURIER_NAME:      [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_name)],
-            COURIER_PHONE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_phone)],
-            COURIER_TYPE:      [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_type)],
-            COURIER_BRAND:     [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_brand)],
-            COURIER_MODEL:     [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_model)],
-            COURIER_DIMENSIONS:[MessageHandler(filters.TEXT & ~filters.COMMAND, courier_dimensions)],
-            COURIER_ADDRESS:   [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_address)],
-            COURIER_CONFIRM:   [CallbackQueryHandler(courier_confirm, pattern="^(confirm|cancel)$")],
+            COURIER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_name)],
+            COURIER_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_phone)],
+            COURIER_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_type)],
+            COURIER_BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_brand)],
+            COURIER_MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_model)],
+            COURIER_DIMENSIONS: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_dimensions)],
+            COURIER_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, courier_address)],
+            COURIER_CONFIRM: [CallbackQueryHandler(courier_confirm, pattern="^(confirm|cancel)$")],
         },
         fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel$")],
         conversation_timeout=900,
     )
     app.add_handler(courier_conv)
-
+    
     # Картриджи
     cartridge_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(cartridge_start, pattern="^cartridge$")],
         states={
-            CARTRIDGE_NAME:           [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_name)],
-            CARTRIDGE_PHONE:          [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_phone)],
-            CARTRIDGE_BRAND:          [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_brand)],
-            CARTRIDGE_MODEL:          [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_model)],
-            CARTRIDGE_CARTRIDGE_MODEL:[MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_cartridge_model)],
-            CARTRIDGE_ADDRESS:        [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_address)],
-            CARTRIDGE_CONFIRM:        [CallbackQueryHandler(cartridge_confirm, pattern="^(confirm|cancel)$")],
+            CARTRIDGE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_name)],
+            CARTRIDGE_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_phone)],
+            CARTRIDGE_BRAND: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_brand)],
+            CARTRIDGE_MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_model)],
+            CARTRIDGE_CARTRIDGE_MODEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_cartridge_model)],
+            CARTRIDGE_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, cartridge_address)],
+            CARTRIDGE_CONFIRM: [CallbackQueryHandler(cartridge_confirm, pattern="^(confirm|cancel)$")],
         },
         fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel$")],
         conversation_timeout=900,
     )
     app.add_handler(cartridge_conv)
-
-    # Сообщения оператору
+    
+    # Сообщения оператору (кроме диалогов)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_manager))
-
+    
     # Старт
     app.add_handler(CommandHandler("start", lambda u, c: main_menu(u, c)))
-
+    
     logger.info("Бот запущен 🚀")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
